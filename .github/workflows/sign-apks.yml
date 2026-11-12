@@ -1,0 +1,88 @@
+name: Sign existing Android artifacts
+
+on:
+  push:
+    branches: ["build/hghub-artifacts-20261112"]
+    paths: [".github/workflows/sign-apks.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sign:
+    name: Sign and verify Android APKs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download verified unsigned build
+        uses: actions/download-artifact@v4
+        with:
+          name: android-unsigned
+          run-id: 43146564669
+          github-token: ${{ github.token }}
+          path: unsigned
+
+      - name: Check original build provenance and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'Repository: nbbk/HGhub' unsigned/BUILD-INFO.txt
+          grep -Fx 'Commit: 643c2b684bd4e3d6c94cf21c1f0eb7550a057f8e' unsigned/BUILD-INFO.txt
+          (cd unsigned && sha256sum -c SHA256SUMS)
+          test "$(find unsigned -maxdepth 1 -name '*-unsigned.apk' | wc -l)" -eq 3
+
+      - name: Sign APKs with persistent fork key and verify
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEY_ALIAS"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_PASSWORD"
+          KS="$RUNNER_TEMP/hghub-release.keystore"
+          trap 'rm -f "$KS"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KS"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BT="$(ls "$SDK/build-tools" | sort -V | tail -1)"
+          APKSIGNER="$SDK/build-tools/$BT/apksigner"
+          ZIPALIGN="$SDK/build-tools/$BT/zipalign"
+          AAPT="$SDK/build-tools/$BT/aapt"
+          mkdir -p signed verification
+          for f in unsigned/*-unsigned.apk; do
+            name="$(basename "$f" -unsigned.apk)"
+            aligned="$RUNNER_TEMP/${name}-aligned.apk"
+            "$ZIPALIGN" -P 16 -f 4 "$f" "$aligned"
+            "$APKSIGNER" sign \
+              --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD \
+              --v4-signing-enabled false \
+              --out "signed/${name}.apk" "$aligned"
+            "$APKSIGNER" verify --verbose --print-certs "signed/${name}.apk" | tee "verification/${name}.txt"
+            "$ZIPALIGN" -P 16 -c 4 "signed/${name}.apk"
+            "$AAPT" dump badging "signed/${name}.apk" | grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)' >> "verification/${name}.txt"
+          done
+          test "$(grep -h 'Signer #1 certificate SHA-256 digest:' verification/*.txt | sort -u | wc -l)" -eq 1
+          cp unsigned/LICENSE.txt signed/LICENSE.txt
+          cp unsigned/BUILD-INFO.txt signed/BUILD-INFO.txt
+          printf '\nAndroid APKs signed with a dedicated nbbk/HGhub release key.\n' >> signed/BUILD-INFO.txt
+          cat verification/*.txt > signed/ANDROID-SIGNATURE-VERIFICATION.txt
+          (cd signed && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+      - name: Upload only signed public artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-signed
+          path: signed/*
+          if-no-files-found: error
+          retention-days: 14
