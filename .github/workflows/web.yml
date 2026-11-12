@@ -20,6 +20,7 @@ jobs:
       - run: npm install --global pnpm@10.13.1
       - run: pnpm install --frozen-lockfile
       - run: VITE_WEB=true pnpm build
+      - run: BROWSER_EXECUTABLE=/usr/bin/google-chrome node tests/web/frontend.mjs
       - run: bash tests/web/deploy-script.sh
       - run: rustup toolchain install 1.90.0 --profile minimal
       - run: cargo +1.90.0 test --manifest-path server/Cargo.toml --locked -j 2
