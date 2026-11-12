@@ -1,8 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import WebAccess from "./WebAccess";
 import { AppProvider } from "./store";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isWeb } from "./transport";
 import "./index.css";
 import { initPlaybackLog, installPlaybackPageEvents } from "./playbackDiagnostics";
 
@@ -20,10 +21,10 @@ window.addEventListener("unhandledrejection", (e) => {
   report("reject", String((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
 });
 
+const application = <AppProvider><App /></AppProvider>;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
+    {isWeb ? <WebAccess>{application}</WebAccess> : application}
   </React.StrictMode>,
 );

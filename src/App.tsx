@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore, type Page, type Tab } from "./store";
 import { isMobile, selfTest } from "./api";
-import { addPluginListener, invoke } from "@tauri-apps/api/core";
+import { addPluginListener } from "@tauri-apps/api/core";
+import { invoke, isWeb } from "./transport";
 import { runBack } from "./back";
 import Home from "./pages/Home";
 import Search, { RankPage } from "./pages/Search";
@@ -249,7 +250,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (platform !== "android") return undefined;
+    if (isWeb || platform !== "android") return undefined;
     let disposed = false;
     let handle: { unregister: () => Promise<void> } | null = null;
     addPluginListener("app", "back-button", () => backRef.current())
@@ -262,13 +263,14 @@ export default function App() {
   }, [platform]);
 
   useEffect(() => {
+    if (isWeb) return;
     const prevent = (e: Event) => e.preventDefault();
     document.addEventListener("contextmenu", prevent);
     return () => document.removeEventListener("contextmenu", prevent);
   }, []);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (isWeb || !import.meta.env.DEV) return;
     const t = window.setTimeout(() => {
       selfTest().then((r) => { invoke("debug_log", { msg: r }).catch(() => {}); }).catch(() => {});
     }, 2500);
@@ -277,7 +279,7 @@ export default function App() {
 
   return (
     <>
-      {isMobile ? <MobileShell /> : <DesktopShell />}
+      {isMobile ? <MobileShell /> : isWeb ? <AppBody /> : <DesktopShell />}
       <LoginModal />
       <ToastHost />
       {/* 登录遮罩键盘处理占位 */}

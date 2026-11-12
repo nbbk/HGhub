@@ -1,3 +1,4 @@
+import { isWeb } from "../transport";
 import { useEffect, useState } from "react";
 import { api, APP_VERSION, fmt, fmtTime, isMobile, platform } from "../api";
 import type { Detail } from "../types";
@@ -66,15 +67,15 @@ export default function Profile({ wide }: { wide: boolean }) {
             className="w-full text-left rounded-(--r-lg) bg-s1 p-4 elev-1 flex items-center gap-3.5 pressable a-rise">
             <Avatar size={56} icon={<IUser size={26} />} hue={220} ring />
             <div className="flex-1 min-w-0">
-              <div className="text-[16px] font-bold text-on">未登录</div>
-              <div className="text-[11px] text-mut mt-0.5">登录后可同步点赞、收藏与评论</div>
+              <div className="text-[16px] font-bold text-on">{isWeb ? "个人网页版 · 游客" : "未登录"}</div>
+              <div className="text-[11px] text-mut mt-0.5">{isWeb ? "收藏与历史仅保存在当前浏览器" : "登录后可同步点赞、收藏与评论"}</div>
               <div className="flex gap-3 mt-2 text-[10.5px] text-mut">
                 <span>收藏 <b className="text-on">{favs.length}</b></span>
                 <span>观看 <b className="text-on">{history.length}</b></span>
               </div>
             </div>
             <span className="flex items-center gap-0.5 h-8 pl-3 pr-2 rounded-full bg-primary text-on-primary text-[11.5px] font-semibold">
-              登录<IChevR size={13} />
+              {isWeb ? "说明" : "登录"}<IChevR size={13} />
             </span>
           </button>
         )}

@@ -1,0 +1,38 @@
+name: Personal web checks
+on:
+  push:
+    branches: [web/personal-server]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: personal-web-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global pnpm@10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: VITE_WEB=true pnpm build
+      - run: bash tests/web/deploy-script.sh
+      - run: rustup toolchain install 1.90.0 --profile minimal
+      - run: cargo +1.90.0 test --manifest-path server/Cargo.toml --locked -j 2
+      - run: docker build -f web/Dockerfile -t hghub-web:test .
+      - name: Container smoke
+        run: |
+          mkdir -p .hghub-web
+          printf '%s' 'ci-only-random-placeholder-password' > .hghub-web/access-password
+          chmod 444 .hghub-web/access-password
+          docker run -d --name hghub-smoke --read-only --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:8080:8080 -v "$PWD/.hghub-web/access-password:/run/secrets/password:ro" -e HGHUB_WEB_PASSWORD_FILE=/run/secrets/password -e HGHUB_WEB_ORIGIN=http://localhost:8080 hghub-web:test
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/healthz && break || sleep 2; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' -d '{}' http://localhost:8080/api/app_boot)" = 401
+          curl -fsS -c /tmp/cookies -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' -d '{"password":"ci-only-random-placeholder-password"}' http://localhost:8080/auth/login
+          curl -fsS -b /tmp/cookies -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' -d '{}' http://localhost:8080/api/app_boot
+      - if: always()
+        run: docker logs hghub-smoke || true

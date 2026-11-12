@@ -87,3 +87,12 @@ pnpm build           # 类型检查与前端构建
 ## 社区
 
 [Linux.DO](https://linux.do/)
+## 个人服务器网页版（本分支）
+
+`web/personal-server` 分支提供个人自用的浏览器版本，保留原客户端。支持 Docker 一键初始化和宝塔 HTTPS 反向代理，详见 [Docker / 宝塔部署教程](docs/web-deploy.md)。
+
+```bash
+bash scripts/web-install.sh
+```
+
+默认带私有访问保护，不应部署成公共代理。上游服务和片源可用性仍受原服务影响；构建成功不代表所有设备、所有片源均已验证。

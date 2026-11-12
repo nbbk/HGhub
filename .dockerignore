@@ -1,0 +1,15 @@
+.git
+node_modules
+**/target
+src-tauri/gen
+dist
+dist-ssr
+test-results
+.hghub-web
+.env
+.env.*
+**/*.keystore
+**/*.jks
+**/*.p12
+**/*.pem
+**/*.log

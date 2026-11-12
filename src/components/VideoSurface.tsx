@@ -1,5 +1,6 @@
 import React, { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
 import Hls from "hls.js";
+import { isWeb } from "../transport";
 import { isLocalMedia, platform, playlist } from "../api";
 import { mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
 import { usePlaybackActivity } from "../usePlaybackActivity";
@@ -166,7 +167,8 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
 
     const proxied = isLocalMedia(src);
     const url = proxied ? src : playlist(src);
-    const useHls = !url.includes("/seg?u=");
+    const nativeHls = isWeb && platform === "ios" && !!video.canPlayType("application/vnd.apple.mpegurl");
+    const useHls = !url.includes("/seg?u=") && !nativeHls;
     const isIos = platform === "ios";
     trace("source.load", { engine: useHls && Hls.isSupported() ? "hls.js" : "native", auto_play: autoPlay, resource: mediaResource(src) });
 

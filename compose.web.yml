@@ -1,0 +1,51 @@
+name: hghub-web
+services:
+  app:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: hghub-web:local
+    restart: unless-stopped
+    init: true
+    env_file: .hghub-web/config.env
+    environment:
+      HGHUB_WEB_BIND: 0.0.0.0:8080
+      HGHUB_WEB_STATIC_DIR: /app/dist
+      HGHUB_WEB_PASSWORD_FILE: /run/secrets/web_password
+    secrets:
+      - web_password
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  caddy:
+    image: caddy:2-alpine
+    profiles: [https]
+    restart: unless-stopped
+    env_file: .hghub-web/config.env
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./web/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+secrets:
+  web_password:
+    file: .hghub-web/access-password
+volumes:
+  caddy_data:
+  caddy_config:

@@ -31,3 +31,6 @@ docs/API.md
 
 # Agent instructions (local)
 AGENTS.md
+# Personal web server local configuration
+.hghub-web/
+server/target/

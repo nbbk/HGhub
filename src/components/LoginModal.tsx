@@ -1,3 +1,4 @@
+import { isWeb } from "../transport";
 import { useState } from "react";
 import { api, isMobile } from "../api";
 import type { User } from "../types";
@@ -32,6 +33,12 @@ export default function LoginModal() {
       setBusy(false);
     }
   };
+
+  if (isWeb) return <Modal open={loginOpen} onClose={() => setLoginOpen(false)} width={392}>
+    <div className="p-5 text-on space-y-3"><h2 className="font-bold">个人网页版 · 游客模式</h2>
+    <p className="text-sm text-mut">此版本暂不提供上游账号登录、注册、点赞或评论。浏览与播放仍取决于上游开放范围；本地收藏和观看记录保留在当前浏览器。</p>
+    <button className="p-3 rounded-lg bg-s3" onClick={() => setLoginOpen(false)}>知道了</button></div>
+  </Modal>;
 
   /* 移动端用底部抽屉，桌面端用居中弹窗 */
   const body = (
