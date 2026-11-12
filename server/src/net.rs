@@ -25,7 +25,7 @@ async fn client_for(raw: &str) -> Result<(url::Url, reqwest::Client), String> {
     let http = reqwest::Client::builder()
         .no_proxy().no_gzip().no_brotli().no_deflate().no_zstd()
         .redirect(reqwest::redirect::Policy::none()).referer(false)
-        .connect_timeout(Duration::from_secs(10)).timeout(Duration::from_secs(120))
+        .connect_timeout(Duration::from_secs(10)).read_timeout(Duration::from_secs(30))
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         .resolve_to_addrs(host, &addrs).build().map_err(|_| "无法创建 HTTP 客户端")?;
     Ok((target, http))
@@ -88,8 +88,19 @@ pub async fn get_range(
     Err("重定向次数超过限制".into())
 }
 /// Enforce declared and actual byte bounds; transparent decompression disabled.
-pub async fn bounded_bytes(mut response: reqwest::Response, max: usize) -> Result<Bytes, String> {
-    if response.content_length().is_some_and(|n| n > max as u64) {
+pub async fn bounded_bytes(response: reqwest::Response, max: usize) -> Result<Bytes, String> {
+    bounded_remaining_bytes(response, max, 0).await
+}
+/// `consumed` accounts for bytes already inspected for an opaque HLS URL.
+pub async fn bounded_remaining_bytes(
+    mut response: reqwest::Response,
+    max: usize,
+    consumed: usize,
+) -> Result<Bytes, String> {
+    if response
+        .content_length()
+        .is_some_and(|n| n.saturating_sub(consumed as u64) > max as u64)
+    {
         return Err("上游响应超过大小限制".into());
     }
     let mut buf = BytesMut::new();
@@ -258,6 +269,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(&bounded_bytes(response, 5).await.unwrap()[..], b"12345");
+        thread.join().unwrap();
+    }
+    #[tokio::test]
+    async fn already_peeked_bytes_are_not_counted_twice() {
+        let (url, thread) = fixture_response("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n12345");
+        let mut response = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap()
+            .get(url)
+            .send()
+            .await
+            .unwrap();
+        let prefix = response.chunk().await.unwrap().unwrap();
+        let tail = bounded_remaining_bytes(response, 5 - prefix.len(), prefix.len())
+            .await
+            .unwrap();
+        assert_eq!(prefix.len() + tail.len(), 5);
         thread.join().unwrap();
     }
     #[tokio::test]

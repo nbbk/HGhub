@@ -339,7 +339,7 @@ async fn media_route(
  let mut prefix=bytes::BytesMut::new();
  if !head&&range.is_none()&&status.is_success(){while prefix.len()<32{match r.chunk().await.map_err(|_|"媒体读取失败")?{Some(c)=>{if c.len()>media::MAX_PLAYLIST{return Err("首块过大".into())}prefix.extend_from_slice(&c)},None=>break}}}
  let looks_hls=std::str::from_utf8(&prefix[..prefix.len().min(16)]).unwrap_or("").trim_start_matches('\u{feff}').starts_with("#EXTM3U");
- if !head&&range.is_none()&&(looks_hls||ct.contains("mpegurl")){let u=r.url().to_string();let rest=net::bounded_bytes(r,media::MAX_PLAYLIST.saturating_sub(prefix.len())).await?;prefix.extend_from_slice(&rest);let b=media::rewrite_playlist(&u,std::str::from_utf8(&prefix).map_err(|_|"播放列表不是 UTF-8")?,"/media")?;return Ok(([(header::CONTENT_TYPE,"application/vnd.apple.mpegurl")],b).into_response())}
+ if !head&&range.is_none()&&(looks_hls||ct.contains("mpegurl")){let u=r.url().to_string();let rest=net::bounded_remaining_bytes(r,media::MAX_PLAYLIST.saturating_sub(prefix.len()),prefix.len()).await?;prefix.extend_from_slice(&rest);let b=media::rewrite_playlist(&u,std::str::from_utf8(&prefix).map_err(|_|"播放列表不是 UTF-8")?,"/media")?;return Ok(([(header::CONTENT_TYPE,"application/vnd.apple.mpegurl")],b).into_response())}
  let mut out=Response::builder().status(status);
  for k in [header::CONTENT_RANGE,header::ACCEPT_RANGES,header::CONTENT_LENGTH]{if k==header::CONTENT_LENGTH&&status==StatusCode::RANGE_NOT_SATISFIABLE&&!head{continue}if let Some(v)=r.headers().get(&k){out=out.header(k,v)}}
  let mime=if ct.starts_with("video/")||ct.starts_with("audio/")||ct.starts_with("text/vtt"){ct.as_str()}else{"application/octet-stream"};out=out.header(header::CONTENT_TYPE,mime);

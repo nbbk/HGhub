@@ -81,8 +81,12 @@ try {
   await phone.goto(origin);
   await phone.getByRole('heading', { name: 'HGhub 个人网页版' }).waitFor();
   const nativeHls = await phone.evaluate(async () => {
-    const React = await import('/node_modules/.vite/deps/react.js');
-    const { createRoot } = await import('/node_modules/.vite/deps/react-dom_client.js');
+    // Vite prebundles these CommonJS packages with a default-export namespace.
+    const reactModule = await import('/node_modules/.vite/deps/react.js');
+    const domModule = await import('/node_modules/.vite/deps/react-dom_client.js');
+    const React = reactModule.default ?? reactModule;
+    const createRoot = domModule.createRoot ?? domModule.default?.createRoot;
+    if (typeof createRoot !== 'function') throw new Error('React DOM fixture import missing createRoot');
     const { default: VideoSurface } = await import('/src/components/VideoSurface.tsx');
     const host = document.createElement('div'); document.body.appendChild(host);
     createRoot(host).render(React.createElement(VideoSurface, { src: 'https://example.invalid/test.m3u8', autoPlay: false, active: false }));

@@ -39,7 +39,7 @@ export default function WebAccess({ children }: { children: ReactNode }) {
       <p className="text-sm text-mut">请输入部署时设置的访问密码。这不是上游网站的账号密码。</p>
       <label className="block text-sm">访问密码
         <input className="mt-2 w-full rounded-lg bg-s3 p-3" type="password" autoComplete="current-password"
-          required maxLength={512} value={password} onChange={e => setPassword(e.target.value)} />
+          required maxLength={1024} value={password} onChange={e => setPassword(e.target.value)} />
       </label>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <button className="w-full rounded-lg bg-primary text-on-primary p-3 disabled:opacity-50" disabled={busy}>{busy ? "验证中…" : "进入"}</button>
