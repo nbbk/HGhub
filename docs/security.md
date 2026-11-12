@@ -7,6 +7,8 @@
 - 图片、HLS、分片、线路探测、镜像发布页及更新元数据的请求经过统一目标检查。只允许 HTTP(S)，拒绝 URL 中的用户名/密码；按主机和端口缓存已校验并固定 DNS 地址的客户端 30 秒；到期重新检查全部 DNS 结果，混合公私网答案整体拒绝。GET 最多跟随 5 次重定向，每一跳重新检查，禁止 HTTPS 降级到 HTTP。HLS 的子清单、备用音轨、密钥及低延迟分片 URI 也经媒体代理改写，不能绕过目标检查。禁用可从外部 JSON 派生新地址的可选插播/内容引导功能。
 - 业务线路必须是纯 HTTPS origin，不接受路径、查询串、片段或认证信息。密码登录和注册仅允许 `https://huangguoai.com`、`https://huangguoai.ai` 两个固定站点；远端镜像列表不能扩大账号信任范围。镜像保留游客浏览。
 - token 与具体站点 origin 绑定，跨站点切换清除登录状态。在途请求捕获自己的站点快照，不能把旧 token 带到新站点。包含账号信息的业务 POST 不跟随任何重定向，避免 307/308 重发密码。旧版会话没有站点归属，升级后需要重新登录。
+- 固定站点账号白名单不受严格安全模式开关影响：即使通过设置、命令行或环境变量进入兼容模式，镜像仍不能接收密码登录、注册或任何带 token 的业务请求；账号策略仍允许匿名浏览和播放请求。白名单按 HTTPS origin 精确匹配，不包含子域、相似域名或非默认端口。
+- 此分支的更新检查和设置页仓库链接指向 `nbbk/HGhub`，不再从上游仓库选择更新。发行 tag 使用 `1.2.1` 这样的版本号（也兼容 `v1.2.1`），不添加仓库名前缀。
 - 网络诊断只返回代理协议、主机和端口；隐藏代理用户名、密码、路径、查询串、片段及 NO_PROXY 列表。无效代理配置隐藏整个原始值。脱敏发生在 Rust 返回数据之前，因此后续写入日志和复制剪贴板均得到脱敏结果。此前已生成的日志/已复制的诊断内容不会自动重写。
 
 ## 严格安全模式与兼容回退（命令行 / 设置开关）
@@ -32,9 +34,12 @@
 pnpm build
 cargo check --locked --manifest-path src-tauri/Cargo.toml
 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
+# 独立进程验证两种模式都在联网前拒绝向镜像发送账号信息
+HGHUB_STRICT=1 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib net::tests::untrusted_origins_reject_credentials_before_network -- --exact
+HGHUB_STRICT=0 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib net::tests::untrusted_origins_reject_credentials_before_network -- --exact
 ```
 
-以上 Rust 测试默认跳过 5 项 `#[ignore]` 联网测试（`media::tests::live_play_chain`、`media::tests::cover_decrypt_works`、`lines::tests::mirrors_live`、`lines::tests::probe_live`、`net::tests::diag`），结果为 28 passed / 0 failed / 5 ignored，覆盖普通内网/FakeIP 边界、IPv4 变体、IPv6、混合 DNS 答案、重定向、凭据站点绑定、旧会话和代理脱敏，不发送真实账号信息。
+上游此前记录的 Rust 测试默认跳过 5 项 `#[ignore]` 联网测试（`media::tests::live_play_chain`、`media::tests::cover_decrypt_works`、`lines::tests::mirrors_live`、`lines::tests::probe_live`、`net::tests::diag`），结果为 28 passed / 0 failed / 5 ignored，覆盖普通内网/FakeIP 边界、IPv4 变体、IPv6、混合 DNS 答案、重定向、凭据站点绑定、旧会话和代理脱敏，不发送真实账号信息。
 
 需要真联网时显式跑：`cargo test --locked --lib -- --ignored`。其中封面测试要求当次有效的地址，用 `HGHUB_TEST_COVER_URL` 传入；播放链路与线路探测依赖上游实时接口。回归测试不再硬编码带 `auth_key` 时效签名的 URL——旧写法的签名已于 2026-11-03 过期，会让 `cargo test --lib` 稳定失败。
 
@@ -48,7 +53,7 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
 
 同次重跑全部 Rust 测试，未跳过任何项目：19 项通过、3 项失败。`mirrors_live` 与 `live_play_chain` 因当前 DNS 将目标解析为普通私网地址而被严格策略拒绝；`playlist_rewrite_works` 使用的旧地址返回 HTTP 403。此前跳过的封面解密、线路探测和网络诊断测试完成运行，其中探测/诊断测试通过仅代表返回结果可生成，不代表上游可达。未因此放宽内网访问限制。
 
-审查后续修正与未采用建议的逐项说明、对应 commit 及验证范围，见 [安全审查后续复核](review-followup.md)。本轮前端生产构建（含测试类型检查）、Rust 编译检查通过；本地 Rust 回归 28 项通过（5 项联网测试标记 `#[ignore]`），浏览器回归 70 项通过。安全模式现在仅由 Rust 的 `security.json` 持久化，前端收到后端确认后才切换；诊断 DNS 仅报告数量和 FakeIP 标记。匿名业务 GET 可逐跳校验后跟随 301/302/303，带凭据/请求体的业务请求不跟随；只有无请求体的逻辑 GET 允许重试。HLS 时间线元数据保留，外部 URI 和资源列表字段仍过滤。
+审查后续修正与未采用建议的逐项说明、对应 commit 及验证范围，见 [安全审查后续复核](review-followup.md)。上游此前记录的前端生产构建（含测试类型检查）、Rust 编译检查通过；本地 Rust 回归 28 项通过（5 项联网测试标记 `#[ignore]`），浏览器回归 70 项通过。安全模式现在仅由 Rust 的 `security.json` 持久化，前端收到后端确认后才切换；诊断 DNS 仅报告数量和 FakeIP 标记。匿名业务 GET 可逐跳校验后跟随 301/302/303，带凭据/请求体的业务请求不跟随；只有无请求体的逻辑 GET 允许重试。HLS 时间线元数据保留，外部 URI 和资源列表字段仍过滤。
 
 本次仅处理审查编号 1、3、5、8；媒体/日志容量上限和 token 明文存储仍需另行处理。外链改用固定版本 `tauri-plugin-opener` 2.7.2（锁定 `open` 5.4.5），HTTP(S) URL 仍经 Rust 地址策略校验，以默认处理器 `with = None` 打开。Windows 路径启用 `shellexecute-on-windows`，通过 `ShellExecuteExW` 传递完整 URL，不经过命令解释器；关闭插件自动接管链接，且不给前端授予 `opener:*` capability，继续统一经过现有校验入口（P1-1）。插件要求 Rust 1.90，项目最低版本声明同步调整。网络错误文本的 UTF-8 截断在改动网络入口时一并改为安全截断。
 

@@ -94,7 +94,7 @@ pub async fn line_probe(urls: Vec<String>) -> Result<Value, String> {
 
 /* ───────────────────────── 更新检查 ───────────────────────── */
 
-const REPO: &str = "Minireel/HGhub";
+const REPO: &str = "nbbk/HGhub";
 
 fn ver_parts(v: &str) -> Vec<u64> {
     v.trim()
@@ -626,7 +626,7 @@ pub async fn api_post_comments(
 }
 #[cfg(test)]
 mod tests {
-    use super::{has_play_url, is_newer, normalize_play_info};
+    use super::{has_play_url, is_newer, normalize_play_info, REPO};
     use serde_json::{json, Value};
 
     #[test]
@@ -700,5 +700,12 @@ mod tests {
         assert!(!is_newer("v1.0.1", "1.0.1"));
         assert!(!is_newer("v0.9.9", "1.0.1"));
         assert!(!is_newer("", "1.0.1"));
+        assert!(is_newer("1.2.2", "1.2.1"));
+        assert!(!is_newer("1.2.1", "1.2.1"));
+    }
+
+    #[test]
+    fn updates_use_the_fork_repository() {
+        assert_eq!(REPO, "nbbk/HGhub");
     }
 }

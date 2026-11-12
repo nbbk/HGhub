@@ -63,6 +63,20 @@ pub fn trusted_auth_origin(origin: &str) -> bool {
     matches!(origin, "https://huangguoai.com" | "https://huangguoai.ai")
 }
 
+/// 账号信任边界与严格/兼容模式无关；兼容回退不能把密码或 token 发给镜像。
+fn validate_auth_origin(origin: &str, path: &str, token: Option<&str>) -> Result<(), String> {
+    if (token.is_some()
+        || matches!(
+            path,
+            "/api/account/loginByPassword" | "/api/account/registerByPassword"
+        ))
+        && !trusted_auth_origin(origin)
+    {
+        return Err("镜像线路仅供游客浏览；登录/注册请切换到固定线路".into());
+    }
+    Ok(())
+}
+
 /// 启动时读回上次选择的线路（文件不存在 / 内容坏了就保持默认）。
 pub fn bind_base(dir: &std::path::Path) {
     network_policy::bind_security(dir);
@@ -473,16 +487,7 @@ pub async fn edge(
     token: Option<&str>,
 ) -> Result<Value, String> {
     let cur = normalize_base(origin).ok_or("业务请求必须使用安全 HTTPS 线路")?;
-    if network_policy::strict_security()
-        && (token.is_some()
-            || matches!(
-                path,
-                "/api/account/loginByPassword" | "/api/account/registerByPassword"
-            ))
-        && !trusted_auth_origin(&cur)
-    {
-        return Err("镜像线路仅供游客浏览；登录/注册请切换到固定线路".into());
-    }
+    validate_auth_origin(&cur, path, token)?;
     let (encoded, ctype) = match &body {
         Some(v) => (
             B64.encode(serde_json::to_vec(v).map_err(|e| e.to_string())?),
@@ -829,24 +834,55 @@ mod tests {
 
     #[tokio::test]
     async fn untrusted_origins_reject_credentials_before_network() {
-        for (path, body, token) in [
-            (
-                "/api/account/loginByPassword",
-                Some(json!({"password":"secret"})),
-                None,
-            ),
-            (
-                "/api/account/registerByPassword",
-                Some(json!({"password":"secret"})),
-                None,
-            ),
-            ("/api/videos", None, Some("secret-token")),
+        // CI 在独立进程中分别设置 HGHUB_STRICT=1 和 0 运行本测试，避免修改全局模式。
+        for origin in [
+            "https://mirror.invalid",
+            "https://huangguoai.com.evil.invalid",
+            "https://huangguoai.ai.evil.invalid",
+            "https://huangguoai.com:8443",
+            "https://huangguoai.ai.",
         ] {
-            let err = edge("https://mirror.invalid", "POST", path, body, token)
-                .await
-                .unwrap_err();
-            assert!(err.contains("镜像线路仅供游客浏览"));
+            for (method, path, body, token) in [
+                (
+                    "POST",
+                    "/api/account/loginByPassword",
+                    Some(json!({"password":"secret"})),
+                    None,
+                ),
+                (
+                    "POST",
+                    "/api/account/registerByPassword",
+                    Some(json!({"password":"secret"})),
+                    None,
+                ),
+                ("GET", "/api/videos", None, Some("secret-token")),
+                ("POST", "/api/videos/1/like", None, Some("secret-token")),
+                ("DELETE", "/api/videos/1/collect", None, Some("")),
+            ] {
+                let err = edge(origin, method, path, body, token)
+                    .await
+                    .unwrap_err();
+                assert!(
+                    err.contains("镜像线路仅供游客浏览"),
+                    "{origin} {method} {path}: {err}"
+                );
+            }
         }
+    }
+
+    #[test]
+    fn auth_policy_preserves_fixed_accounts_and_guest_mirrors() {
+        for origin in ["https://huangguoai.com", "https://huangguoai.ai"] {
+            for path in [
+                "/api/account/loginByPassword",
+                "/api/account/registerByPassword",
+            ] {
+                assert!(validate_auth_origin(origin, path, None).is_ok());
+            }
+            assert!(validate_auth_origin(origin, "/api/videos", Some("token")).is_ok());
+        }
+        assert!(validate_auth_origin("https://mirror.invalid", "/api/videos", None).is_ok());
+        assert!(validate_auth_origin("https://mirror.invalid", "/api/videos/1/play", None).is_ok());
     }
 
     #[tokio::test]
