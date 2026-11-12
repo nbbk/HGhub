@@ -1,0 +1,193 @@
+name: Publish original fork release
+
+on:
+  push:
+    branches: ["publish/hghub-original-20261112"]
+    paths: [".github/workflows/publish-original.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: publish-hghub-original-1.2.1
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          run-id: 43146564669
+          github-token: ${{ github.token }}
+          path: inputs/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos
+          run-id: 43146564669
+          github-token: ${{ github.token }}
+          path: inputs/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          run-id: 43146564669
+          github-token: ${{ github.token }}
+          path: inputs/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-signed
+          run-id: 43150010038
+          github-token: ${{ github.token }}
+          path: inputs/android-signed
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-arm64-unsigned
+          run-id: 43148339318
+          github-token: ${{ github.token }}
+          path: inputs/ios-arm64-unsigned
+      - name: Verify original source and public assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'RELEASE_NOTES'
+          # HGhub 1.2.1 · nbbk 原版源码独立构建
+          
+          按 fork 时的原版源码编译，应用业务逻辑、认证策略及上游更新地址均未改动。此版本不包含本次讨论的认证或更新地址修改，也不是上游官方二进制。
+          
+          源码提交：[bba3152215ca0e18a3042fa854ff2dae743c2fe0](https://github.com/nbbk/HGhub/commit/bba3152215ca0e18a3042fa854ff2dae743c2fe0)
+          
+          构建记录：
+          - [Windows、macOS、Linux、Android](https://github.com/nbbk/HGhub/actions/runs/43146564669)
+          - [Android 签名验证](https://github.com/nbbk/HGhub/actions/runs/43150010038)
+          - [iOS 未签名包](https://github.com/nbbk/HGhub/actions/runs/43148339318)
+          
+          ## 下载选择
+          
+          - Windows x64：`x64-setup.exe` 安装包，或 `x64_portable.zip` 便携包。
+          - macOS：`universal.dmg`，支持 Apple Silicon 和 Intel。
+          - Linux x64：`amd64.deb` 或 `amd64.AppImage`。
+          - Android：通常选择 `arm64.apk`；旧款 32 位设备选 `arm.apk`；x86_64 设备/模拟器选 `x86_64.apk`。
+          - iPhone/iPad：`ios-arm64-unsigned.ipa` 是未签名测试包，需自行签名后安装。详见 `IOS-INSTALL-README.txt`。
+          
+          ## 签名与验证范围
+          
+          - Android 使用本 fork 的长期签名密钥，已检查 APK 签名、对齐和文件校验和。与上游签名不同，不能直接覆盖上游已安装版本；首次切换前请备份数据，可能需要卸载旧版。
+          - Windows 未使用商业代码签名证书。macOS 未使用 Apple Developer 分发证书，也未公证，系统可能提示无法验证发布者。
+          - iOS 未签名，不能直接下载即安装。免费 Apple ID 自签通常每 7 天需要刷新；不提供 TestFlight/App Store 分发。
+          - 五个平台均已通过编译，发布文件均核对来源和 SHA256；未在各平台真机逐一安装、启动和播放验证。未对本原版发布重新运行完整安全测试，也不保证应用或第三方服务绝对安全。
+          - `SHA256SUMS` 可用于检查下载文件完整性。
+          
+          ## 许可
+          
+          仅按随附的 PolyForm Noncommercial 1.0.0 许可证使用和分发。代码许可不代表获得第三方媒体内容授权。
+          
+          Required Notice: Copyright (c) 2026 HGhub contributors (https://github.com/Minireel/HGhub)
+          RELEASE_NOTES
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import hashlib,json,shutil,zipfile,plistlib,re,subprocess
+          source='bba3152215ca0e18a3042fa854ff2dae743c2fe0'
+          base=Path('inputs');out=Path('public');out.mkdir()
+          expected={
+           'windows':['HGhub_1.2.1_x64-setup.exe','HGhub_1.2.1_x64_portable.zip'],
+           'macos':['HGhub_1.2.1_universal.dmg'],
+           'linux':['HGhub_1.2.1_amd64.deb','HGhub_1.2.1_amd64.AppImage'],
+           'android-signed':['HGhub_1.2.1_arm.apk','HGhub_1.2.1_arm64.apk','HGhub_1.2.1_x86_64.apk'],
+           'ios-arm64-unsigned':['HGhub_1.2.1_ios-arm64-unsigned.ipa'],
+          }
+          provenance={'windows':'643c2b684bd4e3d6c94cf21c1f0eb7550a057f8e','macos':'643c2b684bd4e3d6c94cf21c1f0eb7550a057f8e','linux':'643c2b684bd4e3d6c94cf21c1f0eb7550a057f8e','android-signed':'643c2b684bd4e3d6c94cf21c1f0eb7550a057f8e','ios-arm64-unsigned':'730023b9d355d93494a74ba76b47bc89a64cfd22'}
+          runs={43146564669:'643c2b684bd4e3d6c94cf21c1f0eb7550a057f8e',43150010038:'1c51970c518bcc54ffa003300031a57f2d4e5886',43148339318:'730023b9d355d93494a74ba76b47bc89a64cfd22'}
+          def api(path):return json.loads(subprocess.check_output(['gh','api','repos/nbbk/HGhub/'+path]))
+          for run,sha in runs.items():
+           d=api(f'actions/runs/{run}');assert d['conclusion']=='success' and d['head_sha']==sha
+          for sha in set(provenance.values()):
+           d=api(f'compare/{source}...{sha}')
+           assert d['files'] and all(f['filename'] in ['.github/workflows/fork-artifacts.yml','.github/workflows/fork-ios-unsigned.yml'] for f in d['files'])
+          info=[]
+          for plat,names in expected.items():
+           p=base/plat
+           for line in (p/'SHA256SUMS').read_text().splitlines():
+            digest,name=line.split(maxsplit=1);name=name.strip().lstrip('*')
+            assert not Path(name).is_absolute() and '..' not in Path(name).parts
+            assert hashlib.sha256((p/name).read_bytes()).hexdigest()==digest,(plat,name)
+           build=(p/'BUILD-INFO.txt').read_text()
+           assert 'Repository: nbbk/HGhub' in build and 'Commit: '+provenance[plat] in build
+           info.append('['+plat+']\n'+build)
+           for name in names:shutil.copyfile(p/name,out/name)
+          licenses={(base/p/'LICENSE.txt').read_bytes() for p in expected};assert len(licenses)==1
+          (out/'LICENSE.txt').write_bytes(licenses.pop())
+          report=(base/'android-signed/ANDROID-SIGNATURE-VERIFICATION.txt').read_text()
+          cert='4d84a0afbc16b0b98ad762fff8da64738deb5b5c21970c9bbd2c89db7d260b77'
+          assert report.count('certificate SHA-256 digest: '+cert)==3
+          assert len(re.findall(r'Verified using v2 scheme.*: true',report))==3
+          assert len(re.findall(r'Verified using v3 scheme.*: true',report))==3
+          (out/'ANDROID-SIGNATURE-VERIFICATION.txt').write_text(report)
+          shutil.copyfile(base/'ios-arm64-unsigned/IOS-INSTALL-README.txt',out/'IOS-INSTALL-README.txt')
+          with zipfile.ZipFile(out/'HGhub_1.2.1_ios-arm64-unsigned.ipa') as z:
+           names=z.namelist();infos=[n for n in names if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/')==2]
+           assert len(infos)==1 and not any(n.endswith('embedded.mobileprovision') for n in names)
+           p=plistlib.loads(z.read(infos[0]));assert p['CFBundleIdentifier']=='com.hghub.huangguo' and p['CFBundleShortVersionString']=='1.2.1'
+           assert z.getinfo(infos[0].removesuffix('Info.plist')+p['CFBundleExecutable']).file_size>0
+          (out/'BUILD-INFO.txt').write_text('Source repository: nbbk/HGhub\nSource commit: '+source+'\nRelease tag: 1.2.1\nApplication source matches original fork main. Build commits only add workflow files.\n\n'+'\n'.join(info))
+          shutil.copyfile('release-notes.md',out/'RELEASE-NOTES.md')
+          (out/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(out.iterdir())))
+          assert len(list(out.iterdir()))==15
+          print('Verified original-source provenance and15public files')
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: original-release-public-assets
+          path: public/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: original-release-public-assets
+          path: public
+      - name: Publish verified original build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: nbbk/HGhub
+        run: |
+          set -euo pipefail
+          (cd public && sha256sum -c SHA256SUMS)
+          test "$(find public -maxdepth 1 -type f | wc -l)" -eq 15
+          if gh release view 1.2.1 --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo '::error::Release already exists; refusing duplicate or replacement.'
+            exit 1
+          fi
+          if gh api repos/nbbk/HGhub/git/ref/tags/1.2.1 > existing-tag.json 2>/dev/null; then
+            python3 -c "import json; d=json.load(open('existing-tag.json')); assert d['object']['type']=='commit' and d['object']['sha']=='bba3152215ca0e18a3042fa854ff2dae743c2fe0'"
+          fi
+          gh release create 1.2.1 public/* \
+            --repo "$GH_REPO" \
+            --target bba3152215ca0e18a3042fa854ff2dae743c2fe0 \
+            --title 'HGhub 1.2.1 · nbbk 原版源码独立构建' \
+            --notes-file public/RELEASE-NOTES.md --latest
+          gh api repos/nbbk/HGhub/git/ref/tags/1.2.1 > tag.json
+          gh release view 1.2.1 --repo "$GH_REPO" --json url,tagName,isDraft,isPrerelease,assets > release.json
+          python3 - <<'VERIFY'
+          import hashlib,json
+          from pathlib import Path
+          tag=json.load(open('tag.json'))
+          assert tag['object']['type']=='commit' and tag['object']['sha']=='bba3152215ca0e18a3042fa854ff2dae743c2fe0'
+          release=json.load(open('release.json'))
+          assert release['tagName']=='1.2.1' and not release['isDraft'] and not release['isPrerelease']
+          expected={p.name:p.stat().st_size for p in Path('public').iterdir()}
+          assert {a['name']:a['size'] for a in release['assets']}==expected
+          print('Published original source and verified15assets:',release['url'])
+          VERIFY
