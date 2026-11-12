@@ -4,6 +4,16 @@
 
 HGhub 起源于个人对 Tauri 2 和移动端开发的学习与尝试。感谢大家的关注与贡献；项目由个人利用业余时间维护，关注度的增长不会改变维护范围，也不代表服务或支持承诺。
 
+## iPhone / iPad 安装与续签（本 fork）
+
+没有付费 Apple 开发者账号也可使用自己的普通 Apple 账户，通过电脑个人签名安装。免费签名通常 7 天到期，需定期续签；未签名 IPA 不能直接在手机上点击安装。
+
+- **[完整教程：Windows / Mac 安装、签名、自动与手动刷新、常见问题](docs/ios-install-sign-refresh.md)**
+- [下载 HGhub 1.2.1 的 iOS IPA](https://github.com/nbbk/HGhub/releases/download/1.2.1/HGhub_1.2.1_ios-arm64-unsigned.ipa)（iOS 15+，arm64，需个人签名）
+- [全部平台下载](https://github.com/nbbk/HGhub/releases/tag/1.2.1)
+
+教程仅新增安装说明，不修改原应用功能。安装客户端无需自行部署项目；外部服务是否可用仍受下文维护范围约束。
+
 ## 维护范围与社区反馈
 
 维护者本人后续仅主动维护 **UI/UX、交互细节与用户体验**，不再主动跟进上游数据获取、解析或播放链路适配，不承诺外部接口及相关功能持续可用。
