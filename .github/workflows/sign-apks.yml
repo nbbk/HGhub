@@ -72,7 +72,11 @@ jobs:
             "$ZIPALIGN" -P 16 -c 4 "signed/${name}.apk"
             "$AAPT" dump badging "signed/${name}.apk" | grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)' >> "verification/${name}.txt"
           done
-          test "$(grep -h 'Signer #1 certificate SHA-256 digest:' verification/*.txt | sort -u | wc -l)" -eq 1
+          EXPECTED_CERTIFICATE_SHA256="4d84a0afbc16b0b98ad762fff8da64738deb5b5c21970c9bbd2c89db7d260b77"
+          for report in verification/*.txt; do
+            grep -Eq "certificate SHA-256 digest: ${EXPECTED_CERTIFICATE_SHA256}$" "$report"
+          done
+          test "$(grep -h 'certificate SHA-256 digest:' verification/*.txt | sed 's/^.*digest: //' | sort -u | wc -l)" -eq 1
           cp unsigned/LICENSE.txt signed/LICENSE.txt
           cp unsigned/BUILD-INFO.txt signed/BUILD-INFO.txt
           printf '\nAndroid APKs signed with a dedicated nbbk/HGhub release key.\n' >> signed/BUILD-INFO.txt
